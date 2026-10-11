@@ -1,0 +1,70 @@
+Wrasse Card Metrology
+Overview
+
+Corkwing wrasse are small coastal fish with three kinds of adult: females, large colourful nesting males that build and guard seaweed nests, and sneaker males that look like females and spawn by slipping into a nesting male's nest. In a long-running capture-mark-recapture study, every fish caught in a trap was tagged, measured on a measuring board, photographed on both sides on a white board, and released. When the fish was also stripped (pressed gently on the belly to test for eggs or milt), the team recorded its morph, which for sneaker males can only be confirmed this way, and how much it released.
+
+Measuring and examining each fish by hand is the slow part of the field work. The photographs were taken beside a reference card that carries a printed ruler, so in principle the length can be read from the image, and the morph and spawning state may show in the fish's shape and colour.
+
+This challenge asks for the field record from the two photographs of a capture: the fish's total length in millimetres, its morph and its spawning state, plus the fifteen anatomical landmarks on each photograph that the study's annotators placed to measure and sample the fish.
+Data
+
+    photos.parquet: every published photograph, one row each, with photo_id, width, height and image (the JPEG bytes). The photographs are 1024 pixels wide (a few have other proportions); they were downscaled from the camera originals and carry no metadata.
+    train.csv and test.csv: item_id, left_photo and right_photo (the photo_id of the photograph of the fish's left side and of its right side).
+    train_targets.csv: the training answers in exactly the submission layout. Where a photograph has no annotated landmarks, its points column holds [].
+    train_landmarks.csv: every training-side photograph that a person annotated with landmarks, with photo_id, side and points, a JSON object from landmark name to [x, y] in that photograph's pixels. It holds the fifteen scored landmarks, on some photographs a sixteenth (papilla, the genital papilla) and four points on the reference card (card_roi_1 to card_roi_4, the corners of a region the annotators marked on the card's grey area). Some of these photographs belong to training items; the others show training-period fish that were not stripped and are given only for landmark training.
+    sample_submission.csv: a structurally valid placeholder.
+
+Each item is one capture: one fish, photographed on its left side and on its right side within the same minute. In the left photograph the head normally points left and in the right photograph right; a few photographs were taken with the camera turned round, so the whole frame, card included, is upside down. The photographs show a reference card (a white-balance card with a centimetre ruler along one edge, and a solid dark rectangle and a starburst target of fixed size) near the fish; the camera distance varies from session to session, and on some photographs the card is partly cut off by the frame edge.
+What you predict
+
+For every test capture:
+
+    length_mm: the fish's total length in millimetres, as measured on the measuring board (snout to the end of the tail fin).
+    morph: f (female), m (nesting male) or s (sneaker male).
+    spawning: 0 (no gamete release when stripped), 1 (some) or 2 (plentiful).
+    left_points and right_points: on each photograph, a JSON list of fifteen [x, y] points in that photograph's pixels, in this order: snout (the snout tip), eyes_snout, eyes_top, eyes_opercular and eyes_pectoral (the front, top, rear and bottom edge of the eye), top_opercular, medium_opercular and bottom_opercular (three points on the rear edge of the gill cover), pectoral_top and pectoral_bottom (the upper and lower end of the pectoral-fin base), pelvic (the pelvic-fin base), anal_fin (the front of the anal-fin base), caudal_top and caudal_bottom (the upper and lower end of the tail-fin base, where the tail stalk meets the fin rays), and black_point (the dark spot on the tail stalk). The names are those of train_landmarks.csv, where every training annotation shows how the annotators placed them.
+
+How the targets were made
+
+Length, morph and spawning are the field team's records at capture. Every capture in this task is of a fish whose sex was validated by stripping, so the morph is a confirmed one and the spawning state is the result of that test. Nesting males are recognisable by eye in the field; sneaker males are not, and the stripping test is what separates them from females. The landmarks were placed by hand on a subset of the photographs; on the others there is no landmark answer, and their points are not scored.
+Leakage controls
+
+The test set holds out two whole islands and the two latest years: every capture from two of the study's islands (and from a separate reserve), and every capture from the final two field seasons, is in test; training comes from the remaining island in the earlier seasons. No capture day, trap session or camera set-up is shared between training and test, so the pixel scale of a session cannot be learned from training fish caught the same day. A tagged fish's recaptures never straddle the split: captures of test fish from the training period are left out, because a fish's morph is fixed and its length changes slowly. Capture and photograph ids are opaque, the photographs carry no file metadata, and no date, place, trap or tag number is published. The evaluation slices are split the same way: one slice is the island hold-out and the other the latest-seasons hold-out.
+Submission format
+
+Submit a CSV with exactly the columns item_id, length_mm, morph, spawning, left_points and right_points, one row per test capture.
+
+
+item_id,length_mm,morph,spawning,left_points,right_points
+
+w0a1b2c3d4e5,134.5,f,2,"[[212.0,388.5],[262.1,371.6],[276.0,357.2],[290.4,370.9],[276.3,385.0],[360.2,352.7],[372.8,381.0],[338.5,428.9],[372.0,402.2],[369.8,431.5],[392.4,470.3],[540.7,474.6],[701.5,371.0],[690.0,452.5],[752.3,413.8]]","[[811.0,402.0],[761.5,385.2],[747.7,371.0],[733.4,384.6],[747.4,398.5],[664.5,366.4],[652.0,394.7],[686.2,442.3],[652.6,415.9],[654.9,445.0],[632.4,483.6],[485.5,487.9],[318.5,380.0],[327.0,461.5],[270.4,423.6]]"
+
+morph also accepts female, nesting male and sneaker male; spawning must be 0, 1 or 2. An unreadable value earns the credit of a wrong answer for that term. Points are read in order; a missing or unreadable point earns no credit, and points beyond the fifteenth are ignored.
+Evaluation
+
+Four terms, each an average of signed per-capture (or per-photograph) skills measured against a fixed uninformed reference.
+
+    length, weight 0.35: credit max(0, 1 - |submitted - true| / 5 mm), so a 5 mm error earns nothing. The skill is (credit - r) / (1 - r), where r is the mean credit that the median training length earns on the training captures.
+    morph, weight 0.30: credit 1 for the right morph, 0 for a wrong one, and -1 for calling a female a sneaker or a sneaker a female. The three morphs weigh equally whatever their counts (the mean credit within each morph, averaged over the morphs). The skill is (credit - 1/3) / (2/3), so answering the same morph for every fish earns at most 0.
+    spawning, weight 0.15: credit 1 - |submitted - true| / 2 on the 0-1-2 scale, the three levels weighing equally. The skill is (credit - 2/3) / (1/3), so the best constant answer, 1, earns 0.
+    landmarks, weight 0.20: scored only on photographs with annotated landmarks. Each point earns exp(-d^2 / (2 s^2)), where d is its distance in pixels from the annotated point and s is 0.015 times the fish's standard length on the photograph (the annotated distance from the snout tip to the midpoint of caudal_top and caudal_bottom); the photograph's credit is the mean over its fifteen points. The skill is (credit - r) / (1 - r), where r is the credit of placing every point at its mean training position for that side.
+
+The final score is 100 times the weighted sum of the four terms, floored at 0. A term with nothing to score in the graded set is left out and the other weights are renormalised.
+Why these terms and weights
+
+Length carries the most weight because it is the measurement the field team takes from every fish and the one the card makes possible: the camera distance changes between sessions, so a length is only right if the scale is read from the card in the frame. The 5 mm tolerance (under 4% of a typical fish) asks for a measurement, not a size guessed from appearance: guessing the typical size is within 5 mm for only about one fish in seven. Morph is next: telling nesting males from the rest is easy, but a sneaker male looks like a female, and that is the distinction the stripping test was needed for, so a female-sneaker confusion costs twice an ordinary error and each morph counts equally however rare. Twice is the largest cost at which answering the more likely of female and sneaker is always better than dodging with a third answer. Spawning is a graded physiological state and is scored on its ordinal scale with less weight, because the photograph shows it only indirectly. The landmarks check that the fish is located anatomically, not just outlined: they are scored relative to the fish's own size so that near and far photographs count alike, and the tolerance s (1.5% of the standard length, about 8 pixels on a typical photograph) is close to the median error of a landmark detector trained on this species' annotations, so an average body shape fitted to the fish's outline earns well under a trained detector.
+
+Every term is measured against an answer that uses no information about the fish: the typical training length, a single morph, the middle spawning level, and the average landmark position, all earn zero.
+What not to use
+
+Do not use any external copy of these photographs or of crops made from them, any record of these fish, or any model trained on them. The task is to learn from the training captures provided.
+Known limitations
+
+    The field length is a board measurement of a live fish; the photographed fish may be bent or have a folded tail, so a photograph and the board can disagree by a few millimetres.
+    On some photographs the reference card is partly outside the frame, so its ruler is cut.
+    The landmark annotations are one person's placement; they are a few pixels from the true anatomical point on some photographs.
+
+ 
+Expected Output
+
+Your script receives the public dataset directory and exact submission CSV path as two positional arguments.
